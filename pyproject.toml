@@ -1,0 +1,42 @@
+[project]
+name = "optdb"
+dynamic = ["version"]
+description = "A package for interfacing to an optimization database"
+readme = "README.md"
+authors = [
+    { name = "Nicholas Hemenway", email = "nhemenway@mercmarine.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "sqlalchemy>=2.0.54",
+]
+
+[project.optional-dependencies]
+extra = [
+    "ipykernel>=7.3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.hatch.version]
+path = "src/optdb/__init__.py"
+
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+testpaths = [
+    "tests",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
