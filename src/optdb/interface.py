@@ -1,8 +1,5 @@
 import numpy as np
 import pandas as pd
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session
-
 import pycam.optimize.database.schema as sc
 from pycam.optimize import (
     Constraint,
@@ -17,6 +14,8 @@ from pycam.optimize import (
     VariableParam,
 )
 from pycam.util import CaseList
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import Session
 
 
 # import time

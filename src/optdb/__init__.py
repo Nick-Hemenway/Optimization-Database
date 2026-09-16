@@ -1,6 +1,6 @@
 __version__ = "0.0.1"
 
-from optdb.interface import (
+from .interface import (
     DataBase,
     get_constraints,
     get_design_generation_mapping,
@@ -20,7 +20,7 @@ from optdb.interface import (
     get_variable_param_names,
     write_to_database,
 )
-from optdb.schema import (
+from .schema import (
     Constraint,
     Design,
     FixedParam,
