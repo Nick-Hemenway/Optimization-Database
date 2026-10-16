@@ -15,6 +15,15 @@ class Run:
     operating_points: opt.OperatingPoints | None
 
 
+@dataclass
+class Iteration:
+    run_id: int
+    iteration: int
+    objectives: dict[str, opt.ObjectiveResult] | None
+    constraints: dict[str, opt.ConstraintResult] | None
+    metrics: dict[str, opt.MetricResult] | None
+
+
 class Database:
     def __init__(self, path: str | Path):
         self.conn = sqlite3.connect(path)
@@ -100,13 +109,14 @@ class Database:
                 CREATE TABLE IF NOT EXISTS iterations (
                     id INTEGER PRIMARY KEY,
                     run_id INTEGER,
-                    iteration_number INTEGER,
+                    iteration INTEGER,
                     objectives TEXT,
                     constraints TEXT,
                     metrics TEXT,
                     metadata TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (run_id) REFERENCES runs(id)
+                    FOREIGN KEY (run_id) REFERENCES runs(id),
+                    UNIQUE(run_id, iteration)
                 );
                 """
             )
@@ -356,6 +366,92 @@ class Database:
             all_fields = (field.name for field in fields(opt.Constraint))
             out.append(opt.Constraint(**{field: row[field] for field in all_fields}))
         return out
+
+    def add_iteration(
+        self,
+        run_id: int,
+        iteration: int,
+        objectives: dict[str, opt.ObjectiveResult] | None = None,
+        constraints: dict[str, opt.ConstraintResult] | None = None,
+        metrics: dict[str, opt.MetricResult] | None = None,
+        metadata: str | None = None,
+    ):
+        if objectives is not None:
+            objectives = json.dumps(
+                {name: obj.to_dict() for name, obj in objectives.items()}
+            )
+        if constraints is not None:
+            constraints = json.dumps(
+                {name: constr.to_dict() for name, constr in constraints.items()}
+            )
+        if metrics is not None:
+            metrics = json.dumps(
+                {name: metric.to_dict() for name, metric in metrics.items()}
+            )
+        with self.conn:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO iterations (run_id, iteration, objectives, constraints, metrics, metadata)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    iteration,
+                    objectives,
+                    constraints,
+                    metrics,
+                    str(metadata),
+                ),
+            )
+        return cursor.lastrowid
+
+    def get_last_iteration_number(self, run_id: int) -> int:
+        with self.conn:
+            row = self.conn.execute(
+                """
+                SELECT MAX(iteration) as max_iter FROM iterations WHERE run_id = (?)
+                """,
+                (run_id,),
+            ).fetchone()
+        return row["max_iter"]
+
+    def _sanitize_iteration_row(self, row: sqlite3.Row) -> Iteration:
+        row = dict(row)
+        if (obj := row["objectives"]) is not None:
+            obj = json.loads(obj)
+            obj = {
+                name: opt.ObjectiveResult.from_dict(dct) for name, dct in obj.items()
+            }
+        if (constr := row["constraints"]) is not None:
+            constr = json.loads(constr)
+            constr = {
+                name: opt.ConstraintResult.from_dict(dct)
+                for name, dct in constr.items()
+            }
+        if (metrics := row["metrics"]) is not None:
+            metrics = json.loads(metrics)
+            metrics = {
+                name: opt.MetricResult.from_dict(dct) for name, dct in metrics.items()
+            }
+        return Iteration(
+            run_id=row["run_id"],
+            iteration=row["iteration"],
+            objectives=obj,
+            constraints=constr,
+            metrics=metrics,
+        )
+
+    def get_iteration(self, run_id: int, iteration: int = -1) -> Iteration:
+        if iteration == -1:
+            iteration = self.get_last_iteration_number(run_id)
+        row = self.conn.execute(
+            """
+            SELECT * FROM iterations WHERE run_id = (?) AND iteration = (?)
+            """,
+            (run_id, iteration),
+        ).fetchone()
+        return self._sanitize_iteration_row(row)
 
     def close(self):
         self.conn.close()

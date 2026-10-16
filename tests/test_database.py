@@ -3,7 +3,7 @@ from sqlite3 import IntegrityError
 import optwrap as opt
 import pytest
 
-from optdb import Database, Run
+from optdb import Database, Iteration, Run
 
 
 @pytest.fixture
@@ -125,17 +125,75 @@ def test_constraints_round_trip(db_with_run: Database):
     assert restored == constraints
 
 
-# def test_adding_constraint(db_with_run: Database):
-#     constr = opt.Constraint(metric="bar", lower=0, upper=100)
-#     db_with_run.add_constraint(run_id=1, value=constr)
+def test_last_generation_number(db_with_run: Database):
+    db_with_run.add_iteration(run_id=1, iteration=1)
+    db_with_run.add_iteration(run_id=1, iteration=20)
+    last = db_with_run.get_last_iteration_number(run_id=1)
+    assert last == 20
 
 
-# def test_variable_round_trip(db_with_run: Database):
-#     vars = [
-#         opt.registry.Variable(name="foo_var", start=0, size=1, lower=0, upper=100),
-#         opt.registry.Variable(name="bar_var", start=1, size=1, lower=0, upper=100),
-#     ]
-#     for var in vars:
-#         db_with_run.add_variable(run_id=1, value=var)
-#     vars_out = db_with_run.get_variables(run_id=1)
-#     assert vars_out == vars
+def test_duplicate_iteration(db_with_run: Database):
+    db_with_run.add_iteration(run_id=1, iteration=1)
+    with pytest.raises(IntegrityError):
+        db_with_run.add_iteration(run_id=1, iteration=1)
+
+
+def test_iteration_round_trip_empty(db_with_run: Database):
+    db_with_run.add_iteration(run_id=1, iteration=1)
+    db_with_run.add_iteration(run_id=1, iteration=2)
+    gen = db_with_run.get_iteration(run_id=1, iteration=2)
+    assert isinstance(gen, Iteration)
+    expected = Iteration(
+        run_id=1,
+        iteration=2,
+        objectives=None,
+        constraints=None,
+        metrics=None,
+    )
+    assert gen == expected
+
+
+def test_iteration_round_trip(db_with_run: Database):
+    metrics_lst = [
+        opt.MetricResult(name="foo", value=10),
+        opt.MetricResult(name="bar", value=10),
+        opt.MetricResult(name="baz", value=10),
+    ]
+    metrics = {mr.name: mr for mr in metrics_lst}
+    obj_lst = [
+        opt.ObjectiveResult(
+            name="foo1", metric_result=metrics["foo"], scale=1, sense="minimize"
+        ),
+        opt.ObjectiveResult(
+            name="bar1", metric_result=metrics["bar"], scale=10, sense="maximize"
+        ),
+    ]
+    objectives = {o.name: o for o in obj_lst}
+    constrs_lst = [
+        opt.ConstraintResult(
+            name="bar2", metric_result=metrics["bar"], lower=0, upper=100, scale=10
+        ),
+        opt.ConstraintResult(
+            name="baz1", metric_result=metrics["baz"], lower=0, upper=1000, scale=1
+        ),
+    ]
+    constraints = {constr.name: constr for constr in constrs_lst}
+
+    expected = Iteration(
+        run_id=1,
+        iteration=2,
+        objectives=objectives,
+        constraints=constraints,
+        metrics=metrics,
+    )
+
+    db_with_run.add_iteration(run_id=1, iteration=1)
+    db_with_run.add_iteration(
+        run_id=1,
+        iteration=2,
+        objectives=objectives,
+        constraints=constraints,
+        metrics=metrics,
+    )
+    gen = db_with_run.get_iteration(run_id=1, iteration=2)
+    assert gen == expected
