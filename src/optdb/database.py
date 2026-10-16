@@ -32,7 +32,8 @@ class Database:
                     registry TEXT,
                     parameters TEXT,
                     operating_points TEXT,
-                    description TEXT
+                    description TEXT,
+                    metadata TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );         
                 CREATE TABLE IF NOT EXISTS variables (
@@ -76,34 +77,34 @@ class Database:
                 CREATE TABLE IF NOT EXISTS objectives (
                     id INTEGER PRIMARY KEY,
                     run_id INTEGER,
-                    metric_name TEXT,
+                    target TEXT,
                     sense TEXT,
                     scale REAL,
+                    name TEXT,
                     description TEXT,
                     FOREIGN KEY (run_id) REFERENCES runs(id)
                 );
                 CREATE TABLE IF NOT EXISTS constraints (
                     id INTEGER PRIMARY KEY,
                     run_id INTEGER,
-                    metric_name TEXT,
+                    target TEXT,
                     lower REAL,
                     upper REAL,
+                    name TEXT,
                     scale REAL,
                     description TEXT,
                     cv_on_fail REAL,
                     min_auto_scale REAL,
-                    sanitized_scale REAL,
                     FOREIGN KEY (run_id) REFERENCES runs(id)
                 );
                 CREATE TABLE IF NOT EXISTS iterations (
                     id INTEGER PRIMARY KEY,
                     run_id INTEGER,
                     iteration_number INTEGER,
-                    designs TEXT,
-                    metrics TEXT,
-                    cv TEXT,
-                    cv_scaled TEXT,
                     objectives TEXT,
+                    constraints TEXT,
+                    metrics TEXT,
+                    metadata TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (run_id) REFERENCES runs(id)
                 );
@@ -286,35 +287,52 @@ class Database:
         return out
 
     def add_objective(self, run_id: int, value: opt.Objective):
-        if isinstance(value.metric, opt.Metric):
-            name = value.metric.name
+        if isinstance(value.target, opt.Metric):
+            name = value.target.name
         else:
-            name = str(value.metric)
+            name = str(value.target)
         with self.conn:
             self.conn.execute(
                 """
-                INSERT INTO objectives (run_id, metric_name, sense, scale, description)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO objectives (run_id, target, sense, scale, name, description)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, name, value.sense, value.scale, value.description),
+                (run_id, name, value.sense, value.scale, value.name, value.description),
             )
 
+    def get_objectives(self, run_id: int) -> list[opt.Objective]:
+        with self.conn:
+            rows = self.conn.execute(
+                """
+                SELECT * FROM objectives WHERE run_id = ?
+                ORDER BY id ASC
+                """,
+                (run_id,),
+            ).fetchall()
+        out = []
+        for row in rows:
+            row = dict(row)
+            all_fields = (field.name for field in fields(opt.Objective))
+            out.append(opt.Objective(**{field: row[field] for field in all_fields}))
+        return out
+
     def add_constraint(self, run_id: int, value: opt.Constraint):
-        if isinstance(value.metric, opt.Metric):
-            name = value.metric.name
+        if isinstance(value.target, opt.Metric):
+            name = value.target.name
         else:
-            name = str(value.metric)
+            name = str(value.target)
         with self.conn:
             self.conn.execute(
                 """
-                INSERT INTO constraints (run_id, metric_name, lower, upper, scale, description, cv_on_fail, min_auto_scale, sanitized_scale)
-                VALUES (:run_id, :metric_name, :lower, :upper, :scale, :description, :cv_on_fail, :min_auto_scale, :sanitized_scale)
+                INSERT INTO constraints (run_id, target, lower, upper, name, scale, description, cv_on_fail, min_auto_scale)
+                VALUES (:run_id, :target, :lower, :upper, :name, :scale, :description, :cv_on_fail, :min_auto_scale)
                 """,
                 {
                     "run_id": run_id,
-                    "metric_name": name,
+                    "target": name,
                     "lower": value.lower,
                     "upper": value.upper,
+                    "name": value.name,
                     "scale": value.scale,
                     "description": value.description,
                     "cv_on_fail": value.cv_on_fail,
@@ -322,6 +340,22 @@ class Database:
                     "sanitized_scale": value.sanitized_scale,
                 },
             )
+
+    def get_constraints(self, run_id: int) -> list[opt.Constraint]:
+        with self.conn:
+            rows = self.conn.execute(
+                """
+                SELECT * FROM constraints WHERE run_id = ?
+                ORDER BY id ASC
+                """,
+                (run_id,),
+            ).fetchall()
+        out = []
+        for row in rows:
+            row = dict(row)
+            all_fields = (field.name for field in fields(opt.Constraint))
+            out.append(opt.Constraint(**{field: row[field] for field in all_fields}))
+        return out
 
     def close(self):
         self.conn.close()

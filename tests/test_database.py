@@ -103,9 +103,26 @@ def test_op_parameters_round_trip(db_with_run: Database):
     assert params_out == params
 
 
-# def test_adding_objective(db_with_run: Database):
-#     obj = opt.Objective(metric="bar", sense="maximize")
-#     db_with_run.add_objective(run_id=1, value=obj)
+def test_objectives_round_trip(db_with_run: Database):
+    objectives = [
+        opt.Objective(target="bar", sense="minimize"),
+        opt.Objective(target="baz", sense="maximize"),
+    ]
+    for obj in objectives:
+        db_with_run.add_objective(run_id=1, value=obj)
+    restored = db_with_run.get_objectives(run_id=1)
+    assert restored == objectives
+
+
+def test_constraints_round_trip(db_with_run: Database):
+    constraints = [
+        opt.Constraint(target="bar", lower=0, upper=100),
+        opt.Constraint(target="baz", lower=0, upper=1000),
+    ]
+    for constr in constraints:
+        db_with_run.add_constraint(run_id=1, value=constr)
+    restored = db_with_run.get_constraints(run_id=1)
+    assert restored == constraints
 
 
 # def test_adding_constraint(db_with_run: Database):
