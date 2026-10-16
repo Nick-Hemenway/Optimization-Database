@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "sqlalchemy>=2.0.54",
+    "optwrap",
 ]
 
 [project.optional-dependencies]
@@ -40,3 +40,5 @@ dev = [
     "pytest>=9.1.1",
 ]
 
+[tool.uv.sources]
+optwrap = { git = "https://github.com/Mercury-PDE-DesignAnalysisGroup/Optimization-Abstraction-Layer", branch = "dev" }
