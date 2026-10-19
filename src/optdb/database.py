@@ -122,6 +122,11 @@ class Database:
             )
             self.conn.execute("PRAGMA user_version = 1")
 
+    def _execute_single(self, sql: str, params: tuple | dict = ()) -> sqlite3.Cursor:
+        with self.conn:
+            cursor = self.conn.execute(sql, params)
+        return cursor
+
     def add_run(
         self,
         name: str,
@@ -136,27 +141,23 @@ class Database:
             operating_points = json.dumps(operating_points.to_dict())
         if parameters is not None:
             parameters = json.dumps(parameters.to_dict())
-        with self.conn:
-            c = self.conn.cursor()
-            c.execute(
-                """
-                INSERT INTO runs (name, registry, parameters, operating_points, description)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (name, registry, parameters, operating_points, description),
-            )
+        c = self._execute_single(
+            """
+            INSERT INTO runs (name, registry, parameters, operating_points, description)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (name, registry, parameters, operating_points, description),
+        )
         return c.lastrowid
 
     def get_runs(self) -> list[Run]:
-        with self.conn:
-            rows = self.conn.execute("SELECT * FROM runs ORDER BY id ASC").fetchall()
+        rows = self._execute_single("SELECT * FROM runs ORDER BY id ASC").fetchall()
         return [self._sanitize_run_output(row) for row in rows]
 
     def get_run(self, run_id: int) -> Run:
-        with self.conn:
-            row = self.conn.execute(
-                "SELECT * FROM runs WHERE id = ?", (run_id,)
-            ).fetchone()
+        row = self._execute_single(
+            "SELECT * FROM runs WHERE id = ?", (run_id,)
+        ).fetchone()
         return self._sanitize_run_output(row)
 
     def _sanitize_run_output(self, row: sqlite3.Row) -> Run:
@@ -176,38 +177,35 @@ class Database:
         )
 
     def add_variable(self, run_id: int, value: opt.registry.Variable) -> int:
-        with self.conn:
-            c = self.conn.cursor()
-            c.execute(
-                """
-                INSERT INTO variables (run_id, name, start, size, lower, upper, units, description, label, scaling, default_value)
-                VALUES (:run_id, :name, :start, :size, :lower, :upper, :units, :description, :label, :scaling, :default_value)
-                """,
-                {
-                    "run_id": run_id,
-                    "name": value.name,
-                    "start": value.start,
-                    "size": value.size,
-                    "lower": value.lower,
-                    "upper": value.upper,
-                    "units": value.units,
-                    "description": value.description,
-                    "label": value.label,
-                    "scaling": value.scaling,
-                    "default_value": value.default,
-                },
-            )
+        c = self._execute_single(
+            """
+            INSERT INTO variables (run_id, name, start, size, lower, upper, units, description, label, scaling, default_value)
+            VALUES (:run_id, :name, :start, :size, :lower, :upper, :units, :description, :label, :scaling, :default_value)
+            """,
+            {
+                "run_id": run_id,
+                "name": value.name,
+                "start": value.start,
+                "size": value.size,
+                "lower": value.lower,
+                "upper": value.upper,
+                "units": value.units,
+                "description": value.description,
+                "label": value.label,
+                "scaling": value.scaling,
+                "default_value": value.default,
+            },
+        )
         return c.lastrowid
 
     def get_variables(self, run_id: int) -> list[opt.Parameter]:
-        with self.conn:
-            rows = self.conn.execute(
-                """
-                SELECT * FROM variables WHERE run_id = ?
-                ORDER BY id ASC
-                """,
-                (run_id,),
-            ).fetchall()
+        rows = self._execute_single(
+            """
+            SELECT * FROM variables WHERE run_id = ?
+            ORDER BY id ASC
+            """,
+            (run_id,),
+        ).fetchall()
         out = []
         for row in rows:
             row = dict(row)
@@ -219,33 +217,30 @@ class Database:
         return out
 
     def add_parameter(self, run_id: int, value: opt.Parameter) -> int:
-        with self.conn:
-            c = self.conn.cursor()
-            c.execute(
-                """
-                INSERT INTO parameters (run_id, name, units, description, label, default_value)
-                VALUES (:run_id, :name, :units, :description, :label, :default_value)
-                """,
-                {
-                    "run_id": run_id,
-                    "name": value.name,
-                    "units": value.units,
-                    "description": value.description,
-                    "label": value.label,
-                    "default_value": value.default,
-                },
-            )
+        c = self._execute_single(
+            """
+            INSERT INTO parameters (run_id, name, units, description, label, default_value)
+            VALUES (:run_id, :name, :units, :description, :label, :default_value)
+            """,
+            {
+                "run_id": run_id,
+                "name": value.name,
+                "units": value.units,
+                "description": value.description,
+                "label": value.label,
+                "default_value": value.default,
+            },
+        )
         return c.lastrowid
 
     def get_parameters(self, run_id: int) -> list[opt.Parameter]:
-        with self.conn:
-            rows = self.conn.execute(
-                """
-                SELECT * FROM parameters WHERE run_id = ?
-                ORDER BY id ASC
-                """,
-                (run_id,),
-            ).fetchall()
+        rows = self._execute_single(
+            """
+            SELECT * FROM parameters WHERE run_id = ?
+            ORDER BY id ASC
+            """,
+            (run_id,),
+        ).fetchall()
         out = []
         for row in rows:
             row = dict(row)
@@ -256,34 +251,33 @@ class Database:
 
     def add_operating_point_parameter(
         self, run_id: int, value: opt.OperatingPointParameter
-    ):
-        with self.conn:
-            self.conn.execute(
-                """
-                INSERT INTO operating_point_parameters (run_id, name, units, description, label, default_value)
-                VALUES (:run_id, :name, :units, :description, :label, :default_value)
-                """,
-                {
-                    "run_id": run_id,
-                    "name": value.name,
-                    "units": value.units,
-                    "description": value.description,
-                    "label": value.label,
-                    "default_value": value.default,
-                },
-            )
+    ) -> int:
+        c = self._execute_single(
+            """
+            INSERT INTO operating_point_parameters (run_id, name, units, description, label, default_value)
+            VALUES (:run_id, :name, :units, :description, :label, :default_value)
+            """,
+            {
+                "run_id": run_id,
+                "name": value.name,
+                "units": value.units,
+                "description": value.description,
+                "label": value.label,
+                "default_value": value.default,
+            },
+        )
+        return c.lastrowid
 
     def get_operating_point_parameters(
         self, run_id: int
     ) -> list[opt.OperatingPointParameter]:
-        with self.conn:
-            rows = self.conn.execute(
-                """
-                SELECT * FROM operating_point_parameters WHERE run_id = ?
-                ORDER BY id ASC
-                """,
-                (run_id,),
-            ).fetchall()
+        rows = self._execute_single(
+            """
+            SELECT * FROM operating_point_parameters WHERE run_id = ?
+            ORDER BY id ASC
+            """,
+            (run_id,),
+        ).fetchall()
         out = []
         for row in rows:
             row = dict(row)
@@ -301,24 +295,22 @@ class Database:
             name = value.target.name
         else:
             name = str(value.target)
-        with self.conn:
-            self.conn.execute(
-                """
-                INSERT INTO objectives (run_id, target, sense, scale, name, description)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (run_id, name, value.sense, value.scale, value.name, value.description),
-            )
+        self._execute_single(
+            """
+            INSERT INTO objectives (run_id, target, sense, scale, name, description)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (run_id, name, value.sense, value.scale, value.name, value.description),
+        )
 
     def get_objectives(self, run_id: int) -> list[opt.Objective]:
-        with self.conn:
-            rows = self.conn.execute(
-                """
-                SELECT * FROM objectives WHERE run_id = ?
-                ORDER BY id ASC
-                """,
-                (run_id,),
-            ).fetchall()
+        rows = self._execute_single(
+            """
+            SELECT * FROM objectives WHERE run_id = ?
+            ORDER BY id ASC
+            """,
+            (run_id,),
+        ).fetchall()
         out = []
         for row in rows:
             row = dict(row)
@@ -326,40 +318,39 @@ class Database:
             out.append(opt.Objective(**{field: row[field] for field in all_fields}))
         return out
 
-    def add_constraint(self, run_id: int, value: opt.Constraint):
+    def add_constraint(self, run_id: int, value: opt.Constraint) -> int:
         if isinstance(value.target, opt.Metric):
             name = value.target.name
         else:
             name = str(value.target)
-        with self.conn:
-            self.conn.execute(
-                """
-                INSERT INTO constraints (run_id, target, lower, upper, name, scale, description, cv_on_fail, min_auto_scale)
-                VALUES (:run_id, :target, :lower, :upper, :name, :scale, :description, :cv_on_fail, :min_auto_scale)
-                """,
-                {
-                    "run_id": run_id,
-                    "target": name,
-                    "lower": value.lower,
-                    "upper": value.upper,
-                    "name": value.name,
-                    "scale": value.scale,
-                    "description": value.description,
-                    "cv_on_fail": value.cv_on_fail,
-                    "min_auto_scale": value.min_auto_scale,
-                    "sanitized_scale": value.sanitized_scale,
-                },
-            )
+        c = self._execute_single(
+            """
+            INSERT INTO constraints (run_id, target, lower, upper, name, scale, description, cv_on_fail, min_auto_scale)
+            VALUES (:run_id, :target, :lower, :upper, :name, :scale, :description, :cv_on_fail, :min_auto_scale)
+            """,
+            {
+                "run_id": run_id,
+                "target": name,
+                "lower": value.lower,
+                "upper": value.upper,
+                "name": value.name,
+                "scale": value.scale,
+                "description": value.description,
+                "cv_on_fail": value.cv_on_fail,
+                "min_auto_scale": value.min_auto_scale,
+                "sanitized_scale": value.sanitized_scale,
+            },
+        )
+        return c.lastrowid
 
     def get_constraints(self, run_id: int) -> list[opt.Constraint]:
-        with self.conn:
-            rows = self.conn.execute(
-                """
-                SELECT * FROM constraints WHERE run_id = ?
-                ORDER BY id ASC
-                """,
-                (run_id,),
-            ).fetchall()
+        rows = self._execute_single(
+            """
+            SELECT * FROM constraints WHERE run_id = ?
+            ORDER BY id ASC
+            """,
+            (run_id,),
+        ).fetchall()
         out = []
         for row in rows:
             row = dict(row)
@@ -388,32 +379,29 @@ class Database:
             metrics = json.dumps(
                 {name: metric.to_dict() for name, metric in metrics.items()}
             )
-        with self.conn:
-            cursor = self.conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO iterations (run_id, iteration, objectives, constraints, metrics, metadata)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run_id,
-                    iteration,
-                    objectives,
-                    constraints,
-                    metrics,
-                    str(metadata),
-                ),
-            )
-        return cursor.lastrowid
+        c = self._execute_single(
+            """
+            INSERT INTO iterations (run_id, iteration, objectives, constraints, metrics, metadata)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                iteration,
+                objectives,
+                constraints,
+                metrics,
+                str(metadata),
+            ),
+        )
+        return c.lastrowid
 
     def get_last_iteration_number(self, run_id: int) -> int:
-        with self.conn:
-            row = self.conn.execute(
-                """
-                SELECT MAX(iteration) as max_iter FROM iterations WHERE run_id = (?)
-                """,
-                (run_id,),
-            ).fetchone()
+        row = self._execute_single(
+            """
+            SELECT MAX(iteration) as max_iter FROM iterations WHERE run_id = (?)
+            """,
+            (run_id,),
+        ).fetchone()
         return row["max_iter"]
 
     def _sanitize_iteration_row(self, row: sqlite3.Row) -> Iteration:
@@ -445,7 +433,7 @@ class Database:
     def get_iteration(self, run_id: int, iteration: int = -1) -> Iteration:
         if iteration == -1:
             iteration = self.get_last_iteration_number(run_id)
-        row = self.conn.execute(
+        row = self._execute_single(
             """
             SELECT * FROM iterations WHERE run_id = (?) AND iteration = (?)
             """,
