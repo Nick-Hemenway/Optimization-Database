@@ -91,6 +91,7 @@ class Database:
                     scale REAL,
                     name TEXT,
                     description TEXT,
+                    value_on_fail REAL,
                     FOREIGN KEY (run_id) REFERENCES runs(id)
                 );
                 CREATE TABLE IF NOT EXISTS constraints (
@@ -102,7 +103,7 @@ class Database:
                     name TEXT,
                     scale REAL,
                     description TEXT,
-                    cv_on_fail REAL,
+                    violation_on_fail REAL,
                     min_auto_scale REAL,
                     FOREIGN KEY (run_id) REFERENCES runs(id)
                 );
@@ -297,10 +298,18 @@ class Database:
             name = str(value.target)
         self._execute_single(
             """
-            INSERT INTO objectives (run_id, target, sense, scale, name, description)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO objectives (run_id, target, sense, scale, name, description, value_on_fail)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (run_id, name, value.sense, value.scale, value.name, value.description),
+            (
+                run_id,
+                name,
+                value.sense,
+                value.scale,
+                value.name,
+                value.description,
+                value.value_on_fail,
+            ),
         )
 
     def get_objectives(self, run_id: int) -> list[opt.Objective]:
@@ -325,8 +334,8 @@ class Database:
             name = str(value.target)
         c = self._execute_single(
             """
-            INSERT INTO constraints (run_id, target, lower, upper, name, scale, description, cv_on_fail, min_auto_scale)
-            VALUES (:run_id, :target, :lower, :upper, :name, :scale, :description, :cv_on_fail, :min_auto_scale)
+            INSERT INTO constraints (run_id, target, lower, upper, name, scale, description, violation_on_fail, min_auto_scale)
+            VALUES (:run_id, :target, :lower, :upper, :name, :scale, :description, :violation_on_fail, :min_auto_scale)
             """,
             {
                 "run_id": run_id,
@@ -336,7 +345,7 @@ class Database:
                 "name": value.name,
                 "scale": value.scale,
                 "description": value.description,
-                "cv_on_fail": value.cv_on_fail,
+                "violation_on_fail": value.violation_on_fail,
                 "min_auto_scale": value.min_auto_scale,
                 "sanitized_scale": value.sanitized_scale,
             },
