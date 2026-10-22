@@ -1,5 +1,6 @@
 from sqlite3 import IntegrityError
 
+import numpy as np
 import optwrap as opt
 import pytest
 
@@ -146,6 +147,7 @@ def test_iteration_round_trip_empty(db_with_run: Database):
     expected = Iteration(
         run_id=1,
         iteration=2,
+        designs=None,
         objectives=None,
         constraints=None,
         metrics=None,
@@ -154,6 +156,13 @@ def test_iteration_round_trip_empty(db_with_run: Database):
 
 
 def test_iteration_round_trip(db_with_run: Database):
+    reg = opt.Registry()
+    reg.add("var1", lower=0, upper=1000, default=10)
+    reg.add("var2", lower=0, upper=2000, default=20)
+    reg.add("var3", lower=0, upper=3000, default=30)
+    x_scaled = reg.pack_and_scale(var1=[100, 200, 300])
+    designs = reg.unpack_scaled(x_scaled)
+    print(designs)
     metrics_lst = [
         opt.MetricResult(name="foo", value=10),
         opt.MetricResult(name="bar", value=10),
@@ -179,21 +188,20 @@ def test_iteration_round_trip(db_with_run: Database):
     ]
     constraints = {constr.name: constr for constr in constrs_lst}
 
-    expected = Iteration(
-        run_id=1,
-        iteration=2,
-        objectives=objectives,
-        constraints=constraints,
-        metrics=metrics,
-    )
-
     db_with_run.add_iteration(run_id=1, iteration=1)
     db_with_run.add_iteration(
         run_id=1,
         iteration=2,
+        designs=designs,
         objectives=objectives,
         constraints=constraints,
         metrics=metrics,
     )
     gen = db_with_run.get_iteration(run_id=1, iteration=2)
-    assert gen == expected
+    assert gen.iteration == 2
+    assert gen.objectives == objectives
+    assert gen.constraints == constraints
+    assert gen.metrics == metrics
+    assert set(designs.keys()) == set(gen.designs.keys())
+    for key, arr in designs.items():
+        assert np.allclose(gen.designs[key], arr)

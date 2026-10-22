@@ -721,7 +721,7 @@ dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 [[package]]
 name = "optwrap"
 version = "11.1.0"
-source = { git = "https://github.com/Mercury-PDE-DesignAnalysisGroup/Optimization-Abstraction-Layer?branch=dev#d44ef342bccddeb87cff61dd1a1e769d1b2de468" }
+source = { git = "https://github.com/Mercury-PDE-DesignAnalysisGroup/Optimization-Abstraction-Layer?branch=dev#d580157fff45de6d4d69ce9736fd6368722431e8" }
 dependencies = [
     { name = "numpy" },
     { name = "pymoo" },

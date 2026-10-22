@@ -3,7 +3,9 @@ import sqlite3
 from dataclasses import dataclass, fields
 from pathlib import Path
 
+import numpy as np
 import optwrap as opt
+from numpy.typing import NDArray
 
 
 @dataclass
@@ -19,6 +21,7 @@ class Run:
 class Iteration:
     run_id: int
     iteration: int
+    designs: dict[str, NDArray] | None
     objectives: dict[str, opt.ObjectiveResult] | None
     constraints: dict[str, opt.ConstraintResult] | None
     metrics: dict[str, opt.MetricResult] | None
@@ -111,6 +114,7 @@ class Database:
                     id INTEGER PRIMARY KEY,
                     run_id INTEGER,
                     iteration INTEGER,
+                    designs TEXT,
                     objectives TEXT,
                     constraints TEXT,
                     metrics TEXT,
@@ -371,11 +375,15 @@ class Database:
         self,
         run_id: int,
         iteration: int,
+        designs: dict[str, list | NDArray] | None = None,
         objectives: dict[str, opt.ObjectiveResult] | None = None,
         constraints: dict[str, opt.ConstraintResult] | None = None,
         metrics: dict[str, opt.MetricResult] | None = None,
         metadata: str | None = None,
     ):
+        if designs is not None:
+            designs = opt.util.to_json_compatible(designs)
+            designs = json.dumps(designs)
         if objectives is not None:
             objectives = json.dumps(
                 {name: obj.to_dict() for name, obj in objectives.items()}
@@ -390,12 +398,13 @@ class Database:
             )
         c = self._execute_single(
             """
-            INSERT INTO iterations (run_id, iteration, objectives, constraints, metrics, metadata)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO iterations (run_id, iteration, designs, objectives, constraints, metrics, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
                 iteration,
+                designs,
                 objectives,
                 constraints,
                 metrics,
@@ -415,6 +424,9 @@ class Database:
 
     def _sanitize_iteration_row(self, row: sqlite3.Row) -> Iteration:
         row = dict(row)
+        if (designs := row["designs"]) is not None:
+            designs = json.loads(designs)
+            designs = {name: np.asarray(val) for name, val in designs.items()}
         if (obj := row["objectives"]) is not None:
             obj = json.loads(obj)
             obj = {
@@ -434,6 +446,7 @@ class Database:
         return Iteration(
             run_id=row["run_id"],
             iteration=row["iteration"],
+            designs=designs,
             objectives=obj,
             constraints=constr,
             metrics=metrics,
