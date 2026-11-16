@@ -1,3 +1,6 @@
+import shutil
+import sqlite3
+from pathlib import Path
 from sqlite3 import IntegrityError
 
 import numpy as np
@@ -5,11 +8,31 @@ import optwrap as opt
 import pytest
 
 from optdb import Database, Iteration, Run
+from optdb.database import migrate_v1_to_v2
+
+
+@pytest.fixture(params=[False, True], ids=["fresh", "migrated"])
+def migrated(request):
+    return request.param
 
 
 @pytest.fixture
-def db(tmp_path):
-    db = Database(tmp_path / "foo.db")
+def v1_db_path() -> Path:
+    return Path(__file__).parent / "assets/v1.sqlite"
+
+
+@pytest.fixture
+def db_path(tmp_path) -> Path:
+    return Path(tmp_path) / "test.sqlite"
+
+
+@pytest.fixture
+def db(migrated, db_path, v1_db_path):
+    if not migrated:
+        db = Database(db_path)
+    else:
+        shutil.copy(v1_db_path, db_path)
+        db = Database(db_path)
     yield db
     db.close()
 
@@ -163,7 +186,6 @@ def test_iteration_round_trip(db_with_run: Database):
     reg.add("var3", lower=0, upper=3000, default=30)
     x_scaled = reg.pack_and_scale(var1=[100, 200, 300])
     designs = reg.unpack_scaled(x_scaled)
-    print(designs)
     metrics_lst = [
         opt.MetricResult(name="foo", value=10),
         opt.MetricResult(name="bar", value=10),
@@ -209,3 +231,17 @@ def test_iteration_round_trip(db_with_run: Database):
     assert set(designs.keys()) == set(gen.designs.keys())
     for key, arr in designs.items():
         assert np.allclose(gen.designs[key], arr)
+
+
+def test_migration_v1_to_v2(db_path, v1_db_path):
+    shutil.copy(v1_db_path, db_path)
+    conn = sqlite3.connect(db_path)
+    migrate_v1_to_v2(conn)
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+    assert version == 2
+
+
+def test_migration_v1_to_latest(db_path, v1_db_path):
+    shutil.copy(v1_db_path, db_path)
+    db = Database(db_path)
+    assert db.get_user_version() == db.CURRENT_VERSION

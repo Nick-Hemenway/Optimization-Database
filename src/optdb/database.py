@@ -47,8 +47,9 @@ class Database:
 
     def __init__(self, path: str | Path):
         self.conn = sqlite3.connect(path)
+        self._initialize()
         if self.get_user_version() == 0:
-            self._initialize()
+            self._construct()
         else:
             self.migrate()
 
@@ -66,6 +67,9 @@ class Database:
         with self.conn:
             self.conn.row_factory = sqlite3.Row
             self.conn.execute("PRAGMA foreign_keys = ON;")
+
+    def _construct(self):
+        with self.conn:
             self.conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS runs (
