@@ -189,6 +189,7 @@ def test_iteration_round_trip(db_with_run: Database):
     ]
     constraints = {constr.name: constr for constr in constrs_lst}
 
+    X = np.arange(25).reshape(5, 5) * np.pi  # current population
     db_with_run.add_iteration(run_id=1, iteration=1)
     db_with_run.add_iteration(
         run_id=1,
@@ -197,12 +198,14 @@ def test_iteration_round_trip(db_with_run: Database):
         objectives=objectives,
         constraints=constraints,
         metrics=metrics,
+        current_population=X,
     )
     gen = db_with_run.get_iteration(run_id=1, iteration=2)
     assert gen.iteration == 2
     assert gen.objectives == objectives
     assert gen.constraints == constraints
     assert gen.metrics == metrics
+    assert np.allclose(gen.current_population, X)
     assert set(designs.keys()) == set(gen.designs.keys())
     for key, arr in designs.items():
         assert np.allclose(gen.designs[key], arr)

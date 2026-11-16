@@ -410,6 +410,7 @@ class Database:
         objectives: dict[str, opt.ObjectiveResult] | None = None,
         constraints: dict[str, opt.ConstraintResult] | None = None,
         metrics: dict[str, opt.MetricResult] | None = None,
+        current_population: NDArray | None = None,
         metadata: str | None = None,
     ):
         if designs is not None:
@@ -427,10 +428,12 @@ class Database:
             metrics = json.dumps(
                 {name: metric.to_dict() for name, metric in metrics.items()}
             )
+        if current_population is not None:
+            current_population = json.dumps(current_population.tolist())
         c = self._execute_single(
             """
-            INSERT INTO iterations (run_id, iteration, designs, objectives, constraints, metrics, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO iterations (run_id, iteration, designs, objectives, constraints, metrics, current_population, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -439,6 +442,7 @@ class Database:
                 objectives,
                 constraints,
                 metrics,
+                current_population,
                 str(metadata),
             ),
         )
@@ -475,7 +479,7 @@ class Database:
                 name: opt.MetricResult.from_dict(dct) for name, dct in metrics.items()
             }
         if (pop := row["current_population"]) is not None:
-            pop = np.asarray(pop)
+            pop = np.asarray(json.loads(pop))
         return Iteration(
             run_id=row["run_id"],
             iteration=row["iteration"],
