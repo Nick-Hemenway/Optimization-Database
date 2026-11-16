@@ -151,6 +151,7 @@ def test_iteration_round_trip_empty(db_with_run: Database):
         objectives=None,
         constraints=None,
         metrics=None,
+        current_population=None,
     )
     assert gen == expected
 

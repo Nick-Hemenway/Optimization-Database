@@ -1,4 +1,5 @@
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -6,6 +7,8 @@ from pathlib import Path
 import numpy as np
 import optwrap as opt
 from numpy.typing import NDArray
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -25,12 +28,39 @@ class Iteration:
     objectives: dict[str, opt.ObjectiveResult] | None
     constraints: dict[str, opt.ConstraintResult] | None
     metrics: dict[str, opt.MetricResult] | None
+    current_population: NDArray | None
+
+
+def migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    with conn:
+        conn.execute("ALTER TABLE iterations ADD COLUMN current_population TEXT")
+        conn.execute("PRAGMA user_version = 2")
+
+
+MIGRATIONS = {
+    1: migrate_v1_to_v2,
+}
 
 
 class Database:
+    CURRENT_VERSION = 2
+
     def __init__(self, path: str | Path):
         self.conn = sqlite3.connect(path)
-        self._initialize()
+        if self.get_user_version() == 0:
+            self._initialize()
+        else:
+            self.migrate()
+
+    def get_user_version(self) -> int:
+        return self.conn.execute("PRAGMA user_version").fetchone()[0]
+
+    def migrate(self):
+        version = self.get_user_version()
+        while version != self.CURRENT_VERSION:
+            logger.info("Migrating database schema %s --> %s", version, version + 1)
+            MIGRATIONS[version](self.conn)
+            version = self.get_user_version()
 
     def _initialize(self):
         with self.conn:
@@ -118,6 +148,7 @@ class Database:
                     objectives TEXT,
                     constraints TEXT,
                     metrics TEXT,
+                    current_population TEXT,
                     metadata TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (run_id) REFERENCES runs(id),
@@ -443,6 +474,8 @@ class Database:
             metrics = {
                 name: opt.MetricResult.from_dict(dct) for name, dct in metrics.items()
             }
+        if (pop := row["current_population"]) is not None:
+            pop = np.asarray(pop)
         return Iteration(
             run_id=row["run_id"],
             iteration=row["iteration"],
@@ -450,6 +483,7 @@ class Database:
             objectives=obj,
             constraints=constr,
             metrics=metrics,
+            current_population=pop,
         )
 
     def get_iteration(self, run_id: int, iteration: int = -1) -> Iteration:
