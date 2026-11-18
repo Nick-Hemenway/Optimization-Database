@@ -160,7 +160,7 @@ class Database:
                 );
                 """
             )
-            self.conn.execute("PRAGMA user_version = 1")
+            self.conn.execute(f"PRAGMA user_version = {self.CURRENT_VERSION}")
 
     def _execute_single(self, sql: str, params: tuple | dict = ()) -> sqlite3.Cursor:
         with self.conn:
