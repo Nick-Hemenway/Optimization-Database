@@ -52,9 +52,10 @@ class Database:
     def __init__(self, path: str | Path):
         self.conn = sqlite3.connect(path)
         self._initialize()
-        if self.get_user_version() == 0:
+        version = self.get_user_version()
+        if version == 0:
             self._construct()
-        else:
+        elif version < self.CURRENT_VERSION:
             self.migrate()
 
     def get_user_version(self) -> int:
