@@ -1,5 +1,6 @@
 import shutil
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from sqlite3 import IntegrityError
 
@@ -82,6 +83,7 @@ def test_adding_run(db: Database):
     assert run.operating_points == op
     assert run.metadata == metadata
     assert run.description == description
+    assert isinstance(run.created_at, datetime)
 
 
 def test_unique_run_name(db: Database):
