@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from sqlite3 import IntegrityError
+from unittest.mock import patch
 
 import numpy as np
 import optwrap as opt
@@ -42,6 +43,19 @@ def db(migrated, db_path, v1_db_path):
 def db_with_run(db: Database) -> Database:
     db.add_run(name="foo")
     return db
+
+
+def test_migrate_not_called_on_new_database(db_path):
+    with patch("optdb.Database.migrate", autospec=True) as mock:
+        _ = Database(db_path)
+    mock.assert_not_called()
+
+
+def test_migrate_called_on_old_database(db_path: Path, v1_db_path: Path):
+    shutil.copy(v1_db_path, db_path)
+    with patch("optdb.Database.migrate", autospec=True) as mock:
+        _ = Database(db_path)
+    mock.assert_called_once()
 
 
 def test_adding_run_empty(db: Database):
