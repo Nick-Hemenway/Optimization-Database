@@ -66,16 +66,22 @@ def test_adding_run(db: Database):
     reg.add_operating_point_parameter(op2)
     params = opt.Parameters(a=1, b=2)
     op = opt.OperatingPoints(c=2, d=[1, 2, 3])
+    metadata = "{'key': 123}"
+    description = "a description"
     id_ = db.add_run(
         name="foo",
         registry=reg,
         parameters=params,
         operating_points=op,
+        metadata=metadata,
+        description=description,
     )
     run = db.get_run(id_)
     assert run.registry.to_config() == reg.to_config()
     assert run.parameters == params
     assert run.operating_points == op
+    assert run.metadata == metadata
+    assert run.description == description
 
 
 def test_unique_run_name(db: Database):

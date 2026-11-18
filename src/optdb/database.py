@@ -2,6 +2,7 @@ import json
 import logging
 import sqlite3
 from dataclasses import dataclass, fields
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,9 @@ class Run:
     registry: opt.Registry | None
     parameters: opt.Parameters | None
     operating_points: opt.OperatingPoints | None
+    description: str | None
+    metadata: str | None
+    created_at: str | None
 
 
 @dataclass
@@ -174,6 +178,7 @@ class Database:
         parameters: opt.Parameters | None = None,
         operating_points: opt.OperatingPoints | None = None,
         description: str | None = None,
+        metadata: str | None = None,
     ) -> int:
         if registry is not None:
             registry = json.dumps(registry.to_config())
@@ -183,10 +188,10 @@ class Database:
             parameters = json.dumps(parameters.to_dict())
         c = self._execute_single(
             """
-            INSERT INTO runs (name, registry, parameters, operating_points, description)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO runs (name, registry, parameters, operating_points, description, metadata)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (name, registry, parameters, operating_points, description),
+            (name, registry, parameters, operating_points, description, metadata),
         )
         return c.lastrowid
 
@@ -214,6 +219,9 @@ class Database:
             registry=reg,
             parameters=params,
             operating_points=op,
+            description=row["description"],
+            metadata=row["metadata"],
+            created_at=datetime.fromisoformat(row["created_at"]),
         )
 
     def add_variable(self, run_id: int, value: opt.registry.Variable) -> int:
